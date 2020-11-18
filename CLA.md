@@ -1,0 +1,1 @@
+I, the contributor, agree to licence my contributions to this project under the terms of the [GPL 2.0](https://www.gnu.org/licenses/old-licenses/gpl-2.0.html) or any later version, and under the terms of the [GNU FDL 1.2](https://www.gnu.org/licenses/old-licenses/fdl-1.2.html) or any later version.
