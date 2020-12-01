@@ -1,7 +1,7 @@
 import os, strutils, math, terminal, fusion/btreetables
 
 const 
-  HistogramBlocks = ["█","▉","▊","▋","▌","▍","▎","▏"]
+  HistogramBlocks = ["█", "▉", "▊", "▋", "▌", "▍", "▎", "▏"]
   ProgressChars = ["▀", "▜", "▐", "▟", "▄", "▙", "▌", "▛"]
 
 type
@@ -45,19 +45,20 @@ func getLog2Stats(fs: FsStat): seq[Stat] =
     result.add(initStat())
   for size, n in fs.table.pairs:
     for _ in 1..n:
-      let bin = if size == 0:
+      let bin =
+        if size == 0:
           0
         else:
           toInt(floor(log2(toBiggestFloat(size)) / 2)) + 1    
       addFile(result[bin], size)
 
-func drawBar(num, maxNum: Natural; width: Natural): string =
+func drawBar(num, maxNum, width: Natural): string =
   let 
     f = toFloat(num) / toFloat(maxNum) * toFloat(width)
     full = toInt(floor(f))
     tail = f - trunc(f)
   var 
-    partial = toInt(round(7.0*tail))
+    partial = toInt(round(7.0 * tail))
   if partial == 0 and full == 0 and num > 0:
     partial = 1
   for _ in 1..full:
@@ -86,15 +87,17 @@ proc walkFs(path: string): FsStat =
     result.stat.filesSeen.inc()
     check.inc()
     result.stat.totalSize += fSize
-    result.stat.maxSize = max(result.stat.maxSize,fSize)
-    result.stat.minSize = min(result.stat.minSize,fSize)
+    result.stat.maxSize = max(result.stat.maxSize, fSize)
+    result.stat.minSize = min(result.stat.minSize, fSize)
     result.table.inc(fSize)
-  mainThreadBusy = false
-  joinThread(thProgress)
-  stdout.write("\r")
+  defer:
+    mainThreadBusy = false
+    joinThread(thProgress)
+    stdout.write("\r")
 
 when isMainModule:
-  var startPath = if paramCount() > 0:
+  var startPath =
+    if paramCount() > 0:
       paramStr(1)
     else:
       getCurrentDir()
@@ -107,26 +110,27 @@ when isMainModule:
   echo("Stats for files by size strata; Bars: file count.")
   var 
     statStrSeq: seq[(string,BiggestInt)]
-    maxNum:BiggestInt = 0
+    maxNum: BiggestInt = 0
     maxLineLen = 0
   for bin, s in stats.pairs:
     let
       maxSize = if s.filesSeen == 0: BiggestInt(0) else: s.maxSize
-      line = if bin == 0:
-        format("$1: Max: $2; $3 files", [
-          align(formatSize(0), 16),
-          align(formatSize(maxSize), 11),
-          $s.filesSeen
-        ])
-      else:
-        let curStrata = toInt(2.0.pow(toFloat(bin)*2))
-        let prevStrata = toInt(2.0.pow(toFloat(bin-1)*2))
-        format("$1$2: Max: $3; $4 files", [
-          alignLeft(formatSize(prevStrata) & "<", 8, '.'),
-          align("<" & formatSize(curStrata), 8, '.'),
-          align(formatSize(maxSize), 11),
-          $s.filesSeen
-        ])
+      line =
+        if bin == 0:
+          format("$1: Max: $2; $3 files", [
+            align(formatSize(0), 16),
+            align(formatSize(maxSize), 11),
+            $s.filesSeen
+          ])
+        else:
+          let curStrata = toInt(2.0.pow(toFloat(bin) * 2))
+          let prevStrata = toInt(2.0.pow(toFloat(bin - 1) * 2))
+          format("$1$2: Max: $3; $4 files", [
+            alignLeft(formatSize(prevStrata) & "<", 8, '.'),
+            align("<" & formatSize(curStrata), 8, '.'),
+            align(formatSize(maxSize), 11),
+            $s.filesSeen
+          ])
     maxLineLen = max(maxLineLen, line.len())
     maxNum = max(maxNum, s.filesSeen)
     statStrSeq.add((line, s.filesSeen))
