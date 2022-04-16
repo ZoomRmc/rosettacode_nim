@@ -49,7 +49,7 @@ const
 
 proc printCoupleNames(contPairs: seq[int]) =
   for c, r in pairs(contPairs):
-    echo MNames[c] & " 💑" & FNames[contPairs[c]]
+    echo MNames[c] & " 💑 " & FNames[contPairs[c]]
 
 func pair(): (seq[int], seq[int]) =
   # double booking to avoid inverse lookup using find

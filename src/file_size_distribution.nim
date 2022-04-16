@@ -1,6 +1,7 @@
-import os, strutils, math, terminal, fusion/btreetables
+import std/[os, strutils, math, terminal],
+       fusion/btreetables, threading/atomics
 
-const 
+const
   HistogramBlocks = ["█", "▉", "▊", "▋", "▌", "▍", "▎", "▏"]
   ProgressChars = ["▀", "▜", "▐", "▟", "▄", "▙", "▌", "▛"]
 
@@ -40,7 +41,7 @@ func getLog2Stats(fs: FsStat): seq[Stat] =
     if fs.stat.maxSize < 0:
       0
     else:
-      toInt(floor(log2(toBiggestFloat(fs.stat.maxSize)) / 2)) + 1    
+      toInt(floor(log2(toBiggestFloat(fs.stat.maxSize)) / 2)) + 1
   for n in 0..bins:
     result.add(initStat())
   for size, n in fs.table.pairs:
@@ -49,49 +50,48 @@ func getLog2Stats(fs: FsStat): seq[Stat] =
         if size == 0:
           0
         else:
-          toInt(floor(log2(toBiggestFloat(size)) / 2)) + 1    
+          toInt(floor(log2(toBiggestFloat(size)) / 2)) + 1
       addFile(result[bin], size)
 
 func drawBar(num, maxNum, width: Natural): string =
-  let 
+  let
     f = toFloat(num) / toFloat(maxNum) * toFloat(width)
     full = toInt(floor(f))
     tail = f - trunc(f)
-  var 
+  var
     partial = toInt(round(7.0 * tail))
-  if partial == 0 and full == 0 and num > 0:
+  if partial == 0 and full == 0 and num > 0: # draw a thin line even if too small
     partial = 1
   for _ in 1..full:
     result.add(HistogramBlocks[0])
   if partial > 0:
     result.add(HistogramBlocks[^partial])
 
-proc progressUpdate(mainThreadBusy: ptr bool) {.thread.} =
-  while mainThreadBusy[]:
+proc progressUpdate(mainThreadBusy: ptr Atomic[bool]) {.thread.} =
+  while true:
     for i in 0..7:
-      stdout.write("\r", ProgressChars[i], " Scanning the file system...")
-      flushFile(stdout)
+      stderr.write("\r", ProgressChars[i], " Scanning the file system...")
+      flushFile(stderr)
+      if not mainThreadBusy[].load: return
       sleep(250)
 
 proc walkFs(path: string): FsStat =
   result = initFsStat()
-  var 
-    check = 0
-    thProgress: Thread[ptr bool]
-    mainThreadBusy = true
+  var
+    thProgress: Thread[ptr Atomic[bool]]
+    mainThreadBusy = Atomic(true)
   createThread(thProgress, progressUpdate, addr mainThreadBusy)
   for file in walkDirRec(path, {pcFile}, {pcDir}):
-    let 
+    let
       fInfo = getFileInfo(file, false)
       fSize = fInfo.size
     result.stat.filesSeen.inc()
-    check.inc()
     result.stat.totalSize += fSize
     result.stat.maxSize = max(result.stat.maxSize, fSize)
     result.stat.minSize = min(result.stat.minSize, fSize)
     result.table.inc(fSize)
   defer:
-    mainThreadBusy = false
+    mainThreadBusy.store(false)
     joinThread(thProgress)
     stdout.write("\r")
 
@@ -103,12 +103,12 @@ when isMainModule:
       getCurrentDir()
   let startInfo = getFileInfo(startPath)
   if startInfo.kind != pcDir and not startInfo.permissions.contains(fpUserRead):
-    quit("Error reading directory " & startPath)
+    quit("Error reading directory " & startPath, 1)
   let fs = walkFs(startPath)
   echo("Files scanned: ", fs.stat.filesSeen, ", total: ", formatSize(fs.stat.totalSize))
   var stats = fs.getLog2Stats()
   echo("Stats for files by size strata; Bars: file count.")
-  var 
+  var
     statStrSeq: seq[(string,BiggestInt)]
     maxNum: BiggestInt = 0
     maxLineLen = 0
@@ -137,4 +137,4 @@ when isMainModule:
   let maxWidth = terminalWidth() - maxLineLen - 1
   for (line, n) in statStrSeq:
     let bar = drawBar(n, maxNum, maxWidth)
-    echo(alignLeft(line, maxLineLen+1, ' '), bar)
+    echo(alignLeft(line, maxLineLen + 1, ' '), bar)
